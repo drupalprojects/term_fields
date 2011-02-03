@@ -387,39 +387,52 @@ function term_fields_views_api() {
  * Get a list of field IDs.
  */
 function term_fields_get_fids($vid = NULL) {
-  $fields = array();
+  static $fields = array();
 
-  if ($vid) {
-    $result = db_query("SELECT fid FROM {term_fields} WHERE vid = %d", $vid);
+  if (is_null($vid) || !isset($vid) || !is_numeric($vid)) {
+    $vid = 'all';
   }
-  else {
+
+  if (!isset($fields[$vid])) {
+    if ($vid == 'all') {
     $result = db_query("SELECT fid FROM {term_fields}");
   }
+    else {
+      $result = db_query("SELECT fid FROM {term_fields} WHERE vid = %d", $vid);
+    }
+    $fields[$vid] = array();
   while ($data = db_fetch_object($result)) {
-    $fields[] = $data->fid;
+      $fields[$vid][] = $data->fid;
+    }
   }
 
-  return $fields;
+  return $fields[$vid];
 }
 
 /**
  * Get all values from rows in the term_fields table.
  */
 function term_fields_get_rows($vid = NULL) {
-  if ($vid && is_numeric($vid)) {
-    $result = db_query("SELECT * FROM {term_fields} WHERE vid = %d ORDER BY weight ASC", $vid);
+  static $rows = array();
+
+  if (is_null($vid) || !isset($vid) || !is_numeric($vid)) {
+    $vid = 'all';
   }
-  else {
+
+  if (!isset($rows[$vid])) {
+    if ($vid == 'all') {
     $result = db_query("SELECT * FROM {term_fields} ORDER BY vid ASC, weight ASC");
   }
-
-  $rows = array();
+    else {
+      $result = db_query("SELECT * FROM {term_fields} WHERE vid = %d ORDER BY weight ASC", $vid);
+    }
+    $rows[$vid] = array();
   while ($data = db_fetch_object($result)) {
-    $fid = $data->fid;
-    $rows[$fid] = $data;
+      $rows[$vid][$data->fid] = $data->fid;
+    }
   }
 
-  return $rows;
+  return $rows[$vid];
 }
 
 /**
