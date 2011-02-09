@@ -428,7 +428,7 @@ function term_fields_get_rows($vid = NULL) {
     }
     $rows[$vid] = array();
   while ($data = db_fetch_object($result)) {
-      $rows[$vid][$data->fid] = $data->fid;
+      $rows[$vid][$data->fid] = $data;
     }
   }
 
