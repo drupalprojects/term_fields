@@ -352,7 +352,7 @@ function term_fields_get_field($tid, $fid) {
  */
 function term_fields_get_fields($term) {
   if ($fids = term_fields_get_fids($term->vid)) {
-    $field_list = implode(',', $fids);
+    $field_list = '`'. implode('`, `', $fids) .'`';
     $sql = 'SELECT ' . $field_list .  ' FROM {term_fields_term} WHERE tid = %d';
     $result = db_query($sql, $term->tid);
 
