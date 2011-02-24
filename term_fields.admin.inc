@@ -344,7 +344,7 @@ function term_fields_admin_edit_submit($form, &$form_state) {
         $list = array_filter($list, 'strlen');
         foreach ($list as $opt) {
           // Sanitize the user input with a permissive filter.
-          $opt = content_filter_xss($opt);
+          $opt = filter_xss($opt, explode('|', TERM_FIELDS_ALLOWED_TAGS));
           if (strpos($opt, '|') !== FALSE) {
             list($key, $value) = explode('|', $opt);
             $options[$key] = (isset($value) && $value !=='') ? $value : $key;

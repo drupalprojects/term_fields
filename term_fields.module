@@ -2,6 +2,11 @@
 // $Id$
 
 /**
+ * Allowed tags in fields.
+ */
+define('TERM_FIELDS_ALLOWED_TAGS', 'a|b|big|code|del|em|i|ins|pre|q|small|span|strong|sub|sup|tt|ol|ul|li|p|br|img');
+
+/**
  * Implementation of hook_menu().
  */
 function term_fields_menu() {
