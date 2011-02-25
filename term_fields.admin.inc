@@ -1,6 +1,5 @@
 <?php
 
-// $Id$
 
 /**
  * Administration page for Term Fields. Contains all the forms for editing fields.
