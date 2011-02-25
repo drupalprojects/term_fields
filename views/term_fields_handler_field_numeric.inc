@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 /**
  * Handler that allows rendering of fields to be links to the term pages.

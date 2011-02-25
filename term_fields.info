@@ -1,4 +1,3 @@
-; $Id$
 
 name = Term Fields
 description = Allows adminitrators to define fields for taxonomy terms in the same way that CCK allows administrators to define fields for nodes.
