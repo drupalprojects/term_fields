@@ -477,7 +477,7 @@ function term_fields_term_update_record($tid, $values) {
   // Create a list of fields and their respective placeholders for db_query().
   $placeholders = '';
   foreach ($values as $fid => $value) {
-    $placeholders = $placeholders . $fid . ' = ' . (is_numeric($value) ? "%d, " : "'%s', ");
+    $placeholders .= $fid . "='%s', ";
   }
   $placeholders = rtrim($placeholders, ', ');
 
