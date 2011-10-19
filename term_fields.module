@@ -191,6 +191,12 @@ function term_fields_taxonomy($op, $type, $array = NULL) {
         db_query("DELETE FROM {term_fields_term} WHERE tid = %d", $array['tid']);
       }
       else {
+        // When moving terms in a vocabulary tree, each modified term is saved without
+        // its fields. @see http://drupal.org/node/1110388.
+        if (! array_key_exists('fields', $array)) {
+          return;
+        }
+        
         if ($fields = term_fields_vocabulary_fields($array['vid'])) {
           $save = array();
           
@@ -449,6 +455,32 @@ function term_fields_term_fields_info() {
       $info['date']['widgets']['date_popup'] = array(
         'title' => 'Date popup',
         'description' => 'Use a date popup widget to select the date. Maximum granularity is year/month/day.',
+      );
+    }
+  }
+
+  // Color support.
+  $colorpicker = module_exists('colopicker') && function_exists('colorpicker_2_or_later');
+  $jquery_colorpicker = module_exists('jquery_colorpicker');
+    
+  if ($colorpicker || $jquery_colorpicker) {
+    $info['color'] = array(
+     'title' => 'Color',
+      'description' => 'Exposes various color selectors.',
+      'widgets' => array(),
+    );
+    
+    if ($colorpicker) {
+      $info['color']['widgets']['colorpicker'] = array(
+        'title' => 'jQuery colorpicker selector',
+        'description' => 'This widget relies on the colorpicker module.',
+      );
+    }
+    
+    if ($jquery_colorpicker) {
+      $info['color']['widgets']['jquery_colorpicker'] = array(
+        'title' => 'Simple color selector',
+        'description' => 'This widget relies on the jQuery colorpicker module.',
       );
     }
   }
