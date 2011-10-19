@@ -66,7 +66,7 @@ function term_fields_choice_views_data($field) {
     'title' => term_fields_views_format_title($field),
     'help' => term_fields_views_format_help($field),
     'field' => array(
-       'handler' => 'term_fields_handler_field', // @todo extend the views_handler_field_boolean class
+       'handler' => 'views_handler_field_boolean', // @todo extend the views_handler_field_boolean class
        'term_fields_field_name' => $field->fid,
     ),
     'filter' => array(
