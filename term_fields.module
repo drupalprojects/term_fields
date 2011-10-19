@@ -224,6 +224,10 @@ function term_fields_taxonomy($op, $type, $form_values) {
         $values = array();
 
         foreach ($fields as $field) {
+          if (! array_key_exists($field->fid, $form_values)) {
+            continue;
+          }
+          
           $value = $form_values[$field->fid];
 
           switch ($field->type) {
