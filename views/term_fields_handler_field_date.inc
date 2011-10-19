@@ -6,12 +6,17 @@
  */
 
 class term_fields_handler_field_date extends views_handler_field {
+  var $term_fields_field;
+  
   /**
    * Constructor to provide additional field to add.
    */
   function construct() {
     parent::construct();
     $this->additional_fields['tid'] = 'tid';
+    
+    $fields = term_fields_get_fields('fields');
+    $this->term_fields_field = array_key_exists($this->definition['term_fields_field_name'], $fields) ? $fields[$this->definition['term_fields_field_name']] : NULL;
   }
 
   function option_definition() {

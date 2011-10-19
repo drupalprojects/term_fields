@@ -1,591 +1,259 @@
 <?php
-
+/**
+ * @file
+ * Allows to define and manage fields for taxonomy terms.
+ */
+ 
 /**
  * Allowed tags in fields.
+ * 
+ * @todo add settings page to configure that and store with variable_set()... ?
  */
 define('TERM_FIELDS_ALLOWED_TAGS', 'a|b|big|code|del|em|i|ins|pre|q|small|span|strong|sub|sup|tt|ol|ul|li|p|br|img');
 
 /**
- * Implementation of hook_menu().
+ * @defgroup Drupal hooks
+ * @{
+ */
+
+/**
+ * Implements hook_menu().
  */
 function term_fields_menu() {
+  $items = array();
+  
+  // Administration items: default elements are automatically added. See below.
+  
   $items['admin/content/taxonomy/term_fields'] = array(
     'title' => 'Fields',
-    'page callback' => 'term_fields_admin',
+    'page callback' => 'term_fields_admin_overview',
     'description' => 'An overview of term fields.',
-    'access arguments' => array('administer term fields'),
     'type' => MENU_LOCAL_TASK,
-    'file' => 'term_fields.admin.inc',
+    'weight' => 10,
   );
-  $items['admin/content/taxonomy/term_fields/list'] = array(
-    'title' => 'List Fields',
+  
+  $items['admin/content/taxonomy/term_fields/overview'] = array(
+    'title' => 'Overview',
     'type' => MENU_DEFAULT_LOCAL_TASK,
-    'weight' => -50,
+    'weight' => -10,
   );
-  $items['admin/content/taxonomy/term_fields/new'] = array(
+  
+  foreach (array_keys(taxonomy_get_vocabularies()) as $vid) {
+    $items['admin/content/taxonomy/term_fields/'. $vid] = array(
+      // This avoids to rebuild the menu on vocabulary update operation, to
+      // catch any change in vocabulary title.
+      // But because menu_local_tasks() uses the $map variable attached to
+      // the default task path instead of one built from each local item, we need
+      // to store the vocabulary ID and not the argument position as title arguments.
+      'title callback' => 'term_fields_vocabulary_title',
+      'title arguments' => array((string) $vid),
+      'page arguments' => array('term_fields_vid_overview_form', 4),
+      'description' => 'An overview of term fields.',
+      'type' => MENU_LOCAL_TASK,
+    );
+  }
+  
+  $items['admin/content/taxonomy/term_fields/add'] = array(
     'title' => 'Add field',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('term_fields_admin_new'),
-    'description' => 'Form used to create new term fields.',
-    'access arguments' => array('administer term fields'),
+    'page arguments' => array('term_fields_admin_add_term_form'),
+    'description' => 'Add a new term field.',
     'type' => MENU_LOCAL_TASK,
-    'file' => 'term_fields.admin.inc',
+    'tab_parent' => 'admin/content/taxonomy',
+    'weight' => 11,
   );
-  $items['admin/content/taxonomy/term_fields/settings'] = array(
-    'title' => 'Settings',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('term_fields_admin_settings'),
-    'description' => 'Form used to change field settings.',
-    'access arguments' => array('administer term fields'),
-    'type' => MENU_LOCAL_TASK,
-    'file' => 'term_fields.admin.inc',
+  
+  $items['admin/content/taxonomy/term_fields/edit/%term_fields_field/%taxonomy_vocabulary'] = array(
+    'title callback' => 'term_fields_admin_type_title',
+    'title arguments' => array(5, 6),
+    'page arguments' => array('term_fields_admin_field_configure_form', 5, 6),
+    'description' => 'Configure term field settings.',
   );
-  $items['admin/content/taxonomy/term_fields/edit/%fid'] = array(
-    'title' => 'Edit field',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('term_fields_admin_edit', 5),
-    'description' => 'Form used to edit term fields.',
-    'access arguments' => array('administer term fields'),
-    'type' => MENU_CALLBACK,
-    'file' => 'term_fields.admin.inc',
-  );
-  $items['admin/content/taxonomy/term_fields/delete/%fid'] = array(
+  
+  $items['admin/content/taxonomy/term_fields/delete/%term_fields_field'] = array(
     'title' => 'Delete field',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('term_fields_admin_delete', 5),
-    'description' => 'Form used to delete term fields.',
-    'access arguments' => array('administer term fields'),
-    'type' => MENU_CALLBACK,
-    'file' => 'term_fields.admin.inc',
+    'page arguments' => array('term_fields_admin_delete_confirm_form', 5),
+    'description' => 'Delete whole term field.',
+  );
+  
+  // Path for vocabulary field deletion is intentionally different from global
+  // field deletion.
+  $items['admin/content/taxonomy/term_fields/%taxonomy_vocabulary/delete/%term_fields_field'] = array(
+    'title' => 'Delete field',
+    'page arguments' => array('term_fields_admin_delete_confirm_form', 6, 4),
+    'description' => 'Delete term field for a specific vocabulary.',
   );
 
+  // Merge administration items with own default elements.
+  $items = array_map(
+    create_function('$info', "return array_merge(
+      array(
+        'page callback' => 'drupal_get_form',
+        'access arguments' => array('administer term fields'),
+        'file' => 'term_fields.admin.inc',
+        'type' => MENU_CALLBACK),
+      \$info);"),
+    $items);
+  
+  $items['term-fields/ahah/file/%term_fields_field'] = array(
+    'page callback' => 'term_fields_ahah_file',
+    'page arguments' => array(3),
+    'access arguments' => array('upload term files'),
+    'type' => MENU_CALLBACK,
+    'file' => 'plugins/file.inc',
+  );
+  
   return $items;
 }
 
 /**
- * Implementation of hook_perm().
+ * Implements hook_theme().
  */
-function term_fields_perm() {
-  return array('administer term fields');
+function term_fields_theme() {
+  return array(
+    'term_fields_vid_overview_form' => array(
+      'arguments' => array('form' => NULL),
+    ),
+  );
 }
 
 /**
- * Implementation of hook_form_FORM_ID_alter().
+ * Implements hook_perm().
+ */
+function term_fields_perm() {
+  return array('administer term fields', 'upload term files');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
  */
 function term_fields_form_taxonomy_form_term_alter(&$form, &$form_state) {
-  // We don't want our form to appear on the deletion confirmation screen.
-  if (!(isset($_POST['op']) && $_POST['op'] == t('Delete')) || isset($_POST['confirm'])) {
-    // Shortcuts
-    $tid = $form['tid']['#value'];
-    $vid = $form['vid']['#value'];
-
-    // Make the initial fieldset.
+  // Checks for confirmation forms.
+  if (isset($form_state['confirm_delete']) || isset($form_state['confirm_parents'])) {
+    return;
+  }
+  
+  if ($fields = term_fields_vocabulary_fields($form['vid']['#value'])) {
+    $form['#validate'][] = 'term_fields_taxonomy_form_term_validate';
+    
     $form['fields'] = array(
       '#type' => 'fieldset',
       '#title' => t('Term fields'),
       '#collapsed' => TRUE,
       '#collapsible' => TRUE,
-      '#weight' => 1,
+      '#tree' => TRUE,
     );
-
-    // Get all fields for this vocabulary.
-    $fields = term_fields_get_rows($vid);
-
-    if (!empty($fields)) {
-      // Render the fields.
-      foreach ($fields as $fid => $field) {
-        $value = db_result(db_query("SELECT %s FROM {term_fields_term} WHERE tid = %d", $fid, $tid));
-
-        // Some values are going to be conditional based on the data type.
-        switch ($field->type) {
-          case 'checkbox':
-            $form['fields'][$fid] = array(
-              '#type' => $field->type,
-              '#default_value' => $value ? $value : 0,
-              '#description' => $field->description,
-            );
-            break;
-          case 'textfield':
-            $form['fields'][$fid] = array(
-              '#type' => $field->type,
-              '#size' => 70,
-              '#max_length' => 100,
-              '#default_value' => $value ? $value : NULL,
-              '#description' => $field->description,
-            );
-            break;
-
-          case 'textarea':
-            $form['fields'][$fid] = array(
-              '#type' => $field->type,
-              '#rows' => 5,
-              '#cols' => 60,
-              '#default_value' => $value ? $value : NULL,
-              '#description' => $field->description,
-            );
-            break;
-
-          case 'numeric':
-            $form['fields'][$fid] = array(
-              '#type' => 'textfield',
-              '#size' => 2,
-              '#default_value' => isset($value) ? $value : NULL,
-              '#description' => $field->description,
-            );
-            break;
-
-          case 'select':
-            $options = unserialize($field->options);
-            $options = array('' => '') + $options;
-            $form['fields'][$fid] = array(
-              '#type' => 'select',
-              '#options' => $options,
-              '#default_value' => $value || $value == 0 ? $value : NULL,
-              '#description' => $field->description,
-            );
-            break;
-
-          case 'date':
-            $default_value = date_parse($value);
-            $form['fields'][$fid] = array(
-              '#type' => $field->type,
-              '#default_value' => $default_value ? $default_value : NULL,
-              '#element_validate' => array('term_fields_date_validate'),
-              '#description' => $field->description,
-            );
-            break;
-
-          case 'file':
-            $form['fields'][$fid] = array(
-              '#type' => 'file',
-            );
-            $current_file_fid = db_result(db_query("SELECT %s FROM {term_fields_term} WHERE tid = %d", $fid, $tid));
-            if ($current_file_fid) {
-              $form['fields'][$fid . '_delete'] = array(
-                '#type' => 'checkbox',
-                '#title' => t('Delete'),
-              );
-            }
-            $form['#attributes']['enctype'] = 'multipart/form-data';
-            break;
+    
+    $values = isset($form['#term']['tid']) ? term_fields_get_fields_values((object) $form['#term']) : array();
+    
+    // Stores fields in $form_state variable if some field form elements
+    // use custom validation callbacks.
+    $form_state['#fields'] = $fields;
+    
+    foreach ($fields as $field) {
+      if (module_hook($field->module, 'term_fields_forms_api')) {
+        $hook = $field->module .'_term_fields_forms_api';
+        
+        if ($sub_form = call_user_func_array($hook, array('field form', &$form, &$form_state, $field, $values))) {
+          $form['fields'][$field->fid] = $sub_form;
+          
+          // Actually fields are retrieved from database in the correct order, so setting
+          // field weight is not really mandatory.
+          $form['fields'][$field->fid]['#weight'] = $field->weight;       
         }
-
-        // These fields will always be the same.
-        $form['fields'][$fid]['#title'] = t('@title (@fid)', array('@title' => $field->title, '@fid' => $fid));
-        $form['fields'][$fid]['#description'] = check_plain($field->description);
-
-        // File fields are strange.
-        if ($value && $field->type == 'file') {
-          $file = db_fetch_object(db_query("SELECT * FROM {files} WHERE fid = %d", $value));
-          $form['fields'][$fid]['#description'] .= '<br />' . t('Current file: <a href="@filepath">@filename</a>.', array('@filename' => $file->filename, '@filepath' => base_path() . $file->filepath));
-        }
-
-        // We're going to make some alterations to any date fields that exist.
-        $form['#after_build'] = array('term_fields_alter_date');
       }
     }
-    else {
-      $form['fields']['empty'] = array(
-        '#type' => 'item',
-        '#value' => t('There are no fields defined for the vocabulary that this term is a part of.'),
-      );
+    
+    // Modify the main fields order.
+    // @todo add an option in settings page.
+    foreach (array('advanced', 'submit', 'delete') as $name) {
+      if (isset($form[$name])) {
+        $temp = $form[$name];
+        unset($form[$name]);
+        $form[$name] = $temp;
+      }
     }
-
-    $form['submit']['#weight'] = 10;
-    $form['delete']['#weight'] = 10;
+    
+    if (!isset($form['#submit'])) {
+      $form['#submit'] = array('taxonomy_form_term_submit');
+    }
+    
+    array_unshift($form['#submit'], 'term_fields_taxonomy_form_term_submit');
   }
 }
 
 /**
- * Implementation of hook_taxonomy().
+ * Implements hook_taxonomy().
  */
-function term_fields_taxonomy($op, $type, $form_values) {
-  // Shortcuts
-  $tid = $form_values['tid'];
-  $vid = $form_values['vid'];
-
+function term_fields_taxonomy($op, $type, $array = NULL) {
   switch ($type) {
     case 'term':
-      // Get all fields used by this vocabulary.
-      $fields = term_fields_get_rows($vid);
-
-      /*if ($op != 'delete') {
-        // If for some reason we are presented with a $form_values array that does not contain
-        // all the fields for this vocabulary, then we need not be here.
-        foreach ($fields as $field) {
-          if (!isset($form_values[$field->fid])) {
-            return;
+      if ($op === 'delete') {
+        db_query("DELETE FROM {term_fields_term} WHERE tid = %d", $array['tid']);
+      }
+      else {
+        if ($fields = term_fields_vocabulary_fields($array['vid'])) {
+          $save = array();
+          
+          foreach ($fields as $field) {
+            $values = ! empty($array['fields'][$field->fid]) ? $array['fields'][$field->fid] : array();
+            
+            // Add the full $array content in a special key.
+            $values['#term'] = (object) $array;
+            
+            if ($field_values = module_invoke($field->module, 'term_fields_api', 'field save', $field, $values)) {
+              // @todo intersect with database info.
+              $save += $field_values;
+            }
           }
-        }
-      }*/
-
-      if (!empty($fields)) {
-        // Map field values.
-        $values = array();
-
-        foreach ($fields as $field) {
-          $value = $form_values[$field->fid];
-
-          switch ($field->type) {
-            case 'date':
-              $values[$field->fid] = $value['year'] . '-' . $value['month'] . '-' . $value['day'];
-              break;
-
-            case 'file':
-              $current_file_fid = db_result(db_query("SELECT %s FROM {term_fields_term} WHERE tid = %d", $field->fid, $tid));
-              $current_file = db_fetch_object(db_query("SELECT * FROM {files} WHERE fid = %d", $current_file_fid));
-              if ($form_values[$field->fid . '_delete']) {
-                // Delete from database.
-                db_query("DELETE FROM {files} WHERE fid = %d", $current_file_fid);
-                // Remove from file system.
-                file_delete($current_file->filepath);
-
-                $values[$field->fid] = 0;
-              }
-              else {
-                $options = unserialize($field->options);
-                if (!isset($options['file_max_size'])) {
-                  $file_max_size = 1;
-                }
-
-                if (isset($options['file_allowed_exts'])) {
-                  $file_allowed_exts = implode(' ', $options['file_allowed_exts']);
-                }
-                else {
-                  $file_allowed_exts = 'txt';
-                }
-
-                $validators = array(
-                  'file_validate_size' => array($file_max_size * 1024 * 1024),
-                  'file_validate_extensions' => array($file_allowed_exts),
-                );
-
-                if ($file = file_save_upload($field->fid, $validators, file_directory_path())) {
-                  file_set_status($file, 1);
-                  if ($current_file_fid) {
-                    // get rid of old file
-                    db_query("DELETE FROM {files} WHERE fid = %d", $current_file_fid);
-                    file_delete($current_file->filepath);
-                  }
-                  $values[$field->fid] = $file->fid;
-                }
-              }
-              break;
-
-            default:
-              $values[$field->fid] = $value;
-              break;
-          }
-        }
-
-        // Some simple clean up and validation.
-        foreach ($values as $fid => $value) {
-          $type = $fields[$fid]->type;
-          switch ($type) {
-            case 'numeric':
-              // Validate if the entered value is numeric.
-              if (!is_numeric($value) && $value != '') {
-                drupal_set_message(t('Field %fid must be numeric. This field was not set.', array('%fid' => $fid)), 'error');
-                unset($values[$fid]);
-              }
-              // User have *not* entered a value into a numeric field. Remove the
-              // field from the list or an insert/update of an empty string into
-              // an integer field will fail.
-              elseif (!is_numeric($value) && $value == '') {
-                unset($values[$fid]);
-              }
-              break;
-          }
-        }
-
-        // If there are no values to set then we need to get out of here.
-        // The exception being if the term is being deleted.
-        if ($op != 'delete' && count($values) == 0) {
-          break;
-        }
-
-        switch ($op) {
-          case 'insert':
-            term_fields_term_create_record($tid, $values);
-            break;
-
-          case 'update':
-            // See if there is a record for this term already.
-            // If so, update it. If not, insert a new record.
-            $result = db_query("SELECT tid FROM {term_fields_term} WHERE tid = %d", $tid);
-            if (term_fields_fetch_fields($result)) {
-              // Update the existing record.
-              term_fields_term_update_record($tid, $values);
+          
+          if ($save) {
+            $save['tid'] = $array['tid'];
+            $save['vid'] = $array['vid'];
+            $update = array();
+            
+            if ($result = db_result(db_query("SELECT tid FROM {term_fields_term} WHERE tid = %d", $array['tid']))) {
+              $update = array('tid', 'vid');              
+            }
+            
+            // CCK has its own implementation of drupal_write_record(), which take care
+            // of NULL values.
+            if (module_exists('content') && function_exists('content_write_record')) {
+              content_write_record('term_fields_term', $save, $update);
             }
             else {
-              // Insert a new record.
-              term_fields_term_create_record($tid, $values);
+              drupal_write_record('term_fields_term', $save, $update);
+            
+              // Handles NULL values, because drupal_write_record() ignores them.
+              if ($update = array_filter(array_diff_key($save, array('tid' => TRUE, 'vid' => TRUE)), 'is_null')) {
+                $nulls = array();
+                $args = array($save['tid'], $save['vid']);
+                
+                foreach (array_keys($update) as $column) {
+                  $nulls[] = "`$column` = null";
+                }
+                
+                db_query("UPDATE {term_fields_term} SET ". implode(', ', $nulls) ." WHERE tid = %d AND vid = %d", $args);
+              }
             }
-            break;
-
-          case 'delete':
-            db_query("DELETE FROM {term_fields_term} WHERE tid = %d", $tid);
+          }
         }
       }
       break;
 
     case 'vocabulary':
-      switch ($op) {
-        case 'delete':
-          $fids = term_fields_get_fids($vid);
-          if (!empty($fids)) {
-            foreach ($fids as $fid) {
-              db_drop_field($ret, 'term_fields_term', $fid);
-            }
-            db_query("DELETE FROM {term_fields} WHERE vid = %d", $vid);
-          }
-          break;
+      if ($op === 'delete') {
+        db_query("DELETE FROM {term_fields_instance} WHERE vid = %d", $array['vid']);
       }
+      
+      if (in_array($op, array('insert', 'delete'))) {
+        menu_rebuild();
+      }
+      break;
   }
 }
 
 /**
- * Retrieve a single field value given a term ID and field ID.
- */
-function term_fields_get_field($tid, $fid) {
-  return db_result(db_query("SELECT %s FROM {term_fields_term} WHERE tid = %d", $fid, $tid));
-}
-
-/**
- * Retrieve an array of fields from a given term, keyed by field ID.
- */
-function term_fields_get_fields($term) {
-  if ($fids = term_fields_get_fids($term->vid)) {
-    $field_list = '`'. implode('`, `', $fids) .'`';
-    $sql = 'SELECT ' . $field_list .  ' FROM {term_fields_term} WHERE tid = %d';
-    $result = db_query($sql, $term->tid);
-
-    return db_fetch_array($result);
-  }
-
-  return NULL;
-}
-
-/**
- * Retrieve a term object like taxonomy_get_term(), but with fields.
- */
-function term_fields_get_term($tid) {
-  $term = taxonomy_get_term($tid);
-  $fields = term_fields_get_fields($term);
-  $term->fields = $fields;
-
-  return $term;
-}
-
-/**
- * Implementation of hook_views_api().
- */
-function term_fields_views_api() {
-  return array(
-    'api' => 2,
-    'path' => drupal_get_path('module', 'term_fields') . '/views',
-  );
-}
-
-/**
- * Get a list of field IDs.
- */
-function term_fields_get_fids($vid = NULL) {
-  static $fields = array();
-
-  if (is_null($vid) || !isset($vid) || !is_numeric($vid)) {
-    $vid = 'all';
-  }
-
-  if (!isset($fields[$vid])) {
-    if ($vid == 'all') {
-    $result = db_query("SELECT fid FROM {term_fields}");
-  }
-    else {
-      $result = db_query("SELECT fid FROM {term_fields} WHERE vid = %d", $vid);
-    }
-    $fields[$vid] = array();
-  while ($data = db_fetch_object($result)) {
-      $fields[$vid][] = $data->fid;
-    }
-  }
-
-  return $fields[$vid];
-}
-
-/**
- * Get all values from rows in the term_fields table.
- */
-function term_fields_get_rows($vid = NULL) {
-  static $rows = array();
-
-  if (is_null($vid) || !isset($vid) || !is_numeric($vid)) {
-    $vid = 'all';
-  }
-
-  if (!isset($rows[$vid])) {
-    if ($vid == 'all') {
-    $result = db_query("SELECT * FROM {term_fields} ORDER BY vid ASC, weight ASC");
-  }
-    else {
-      $result = db_query("SELECT * FROM {term_fields} WHERE vid = %d ORDER BY weight ASC", $vid);
-    }
-    $rows[$vid] = array();
-  while ($data = db_fetch_object($result)) {
-      $rows[$vid][$data->fid] = $data;
-    }
-  }
-
-  return $rows[$vid];
-}
-
-/**
- * Get all values from a single row in the term_fields table.
- */
-function term_fields_get_row($fid) {
-  return db_fetch_object(db_query("SELECT * FROM {term_fields} WHERE fid = '%s'", $fid));
-}
-
-/**
- * Insert a record in the term_field_term table.
- */
-function term_fields_term_create_record($tid, $values) {
-  // Create a comma separted list of fields to be used in the query.
-  $fields = array_keys($values);
-  $field_list = implode(', ', $fields);
-
-  // Create a list of placeholders so db_query() can do it's thing.
-  $placeholders = '';
-  foreach ($values as $value) {
-    $placeholders = $placeholders . (is_numeric($value) ? "%d, " : "'%s', ");
-  }
-  $placeholders = rtrim($placeholders, ', ');
-
-  // Put the term id at the beginning of the array.
-  array_unshift($values, $tid);
-
-  // go go go
-  $sql = 'INSERT INTO {term_fields_term} (tid, ' . $field_list . ') VALUES (%d, ' . $placeholders . ')';
-  db_query($sql, $values);
-}
-
-/**
- * Update an existing record in the term_fields_term table.
- */
-function term_fields_term_update_record($tid, $values) {
-
-  // Create a list of fields and their respective placeholders for db_query().
-  $placeholders = '';
-  foreach ($values as $fid => $value) {
-    $placeholders .= $fid . "='%s', ";
-  }
-  $placeholders = rtrim($placeholders, ', ');
-
-  // Add the tid on to the end of the array.
-  array_push($values, $tid);
-
-  // Construct and execute.
-  $sql = 'UPDATE {term_fields_term} SET ' . $placeholders . ' WHERE tid = %d';
-  db_query($sql, $values);
-}
-
-/**
- * #after_build function to pop a blank value to the top of date fields.
- */
-function term_fields_alter_date($form, $form_element) {
-  $result = db_query("SELECT fid FROM {term_fields} WHERE type = '%s' AND vid = %d", 'date', $form['vid']['#value']);
-  if (db_affected_rows()) {
-    $date_ids = array();
-    while ($data = db_fetch_object($result)) {
-      $date_ids[] = $data->fid;
-    }
-    foreach ($date_ids as $did) {
-      // Add blank values to each select list
-      $blank = array(0 => '');
-      $form['fields'][$did]['year']['#options'] = $blank + $form['fields'][$did]['year']['#options'];
-      $form['fields'][$did]['month']['#options'] = $blank + $form['fields'][$did]['month']['#options'];
-      $form['fields'][$did]['day']['#options'] = $blank + $form['fields'][$did]['day']['#options'];
-
-      // Give titles to each list.
-      $form['fields'][$did]['year']['#title'] = t('Year');
-      $form['fields'][$did]['month']['#title'] = t('Month');
-      $form['fields'][$did]['day']['#title'] = t('Day');
-    }
-  }
-
-  return $form;
-}
-
-/**
- * Validator for date fields.
- */
-function term_fields_date_validate($element, &$form_state) {
-  $year = $element['year']['#value'];
-  $month = $element['month']['#value'];
-  $day = $element['day']['#value'];
-
-  // We allow the user to unset date fields by leaving all fields (day, month AND year) blank.
-  // They can only have either all 3 of them set, or all 3 of them unset.
-  if (empty($year) || empty($month) || empty($day)) {
-    if (!(empty($year) && empty($month) && empty($day))) {
-      form_set_error($element['#name'], t('A value must be specified for month, day and year. If you want to make this field blank, unset all three fields.'));
-    }
-  }
-}
-
-/**
- * Loader function for fid argument.
- */
-function fid_load($fid) {
-  if ($fid) {
-    $fids = term_fields_get_fids();
-    if (in_array($fid, $fids)) {
-      return $fid;
-    }
-  }
-
-  return FALSE;
-}
-
-/**
- * Helper function to modify the datetime object in the database to whatever format the user chooses.
- */
-function term_fields_format_date($date) {
-  $format = variable_get('term_fields_date_format', 'd/m/Y');
-  $format_custom = variable_get('term_fields_date_format_custom', '');
-  if (!empty($date) && $date != "0000-00-00 00:00:00") {
-    $datetime = date_create($date);
-    if ($format_custom) {
-      $date = date_format($datetime, $format_custom);
-    }
-    else {
-      $date = date_format($datetime, $format);
-    }
-    return $date;
-  }
-  else {
-    return '';
-  }
-}
-
-/**
- * Helper function to determine if there are any fields defined, and return them
- * in an array usable by theme_table if so.
- */
-function term_fields_fetch_fields($result) {
-  $rows = array();
-  while ($data = db_fetch_object($result)) {
-    $rows[$data->fid]['title'] = t('@title (@fid)', array('@title' => $data->title, '@fid' => $data->fid));
-    $rows[$data->fid]['vocab'] = check_plain($data->name);
-    $rows[$data->fid]['desc'] = check_plain($data->description);
-    $rows[$data->fid]['edit'] = l(t('Edit'), 'admin/content/taxonomy/term_fields/edit/' . $data->fid);
-  }
-
-  return !empty($rows) ? $rows : 0;
-}
-
-/**
- * Implementation of hook_nodeapi().
+ * Implementats hook_nodeapi().
  */
 function term_fields_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
   if (in_array($op, array('view', 'prepare', 'print')) && ! empty($node->taxonomy)) {
@@ -610,7 +278,7 @@ function term_fields_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
 
     foreach ($taxonomy as &$term) {
       if (is_object($term)) {
-        $term->fields = term_fields_get_fields($term);
+        $term->fields = term_fields_render_fields($term);
       }
     }
 
@@ -620,7 +288,7 @@ function term_fields_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
 }
 
 /**
- * Implementation of hook_link_alter().
+ * Implements hook_link_alter().
  *
  * We use this hook in a non-standard way. Actually it permits to use
  * the extra information added by term fields module to $node->taxonomy
@@ -639,7 +307,311 @@ function term_fields_link_alter(&$links, $node) {
 }
 
 /**
- * Implementation of hook_token_values().
+ * Implements hook_schema_alter()
+ */
+function term_fields_schema_alter(&$schema) {
+  $schema['term_fields_term']['fields'] = array_merge($schema['term_fields_term']['fields'], term_fields_get_storage());
+}
+
+/**
+ * @} End of "defgroup Drupal hooks".
+ * 
+ * @defgroup Filefield hooks
+ * @{
+ */
+ 
+/**
+ * Implements hook_file_delete().
+ */
+function term_fields_file_delete($file) {
+  if ($storage = term_fields_get_storage()) {
+    foreach (term_fields_get_fields('fields') as $field => $info) {
+      if ($field->type === 'file' && isset($storage[$field->fid][$field->fid .'_fid'])) {
+        $update = array();
+        
+        foreach (array_keys($storage[$field->fid]) as $column) {
+          $update[] = $column .' = null';
+        }
+        
+        db_query("UPDATE {term_fields_term} SET ". implode(', ', $update) ." WHERE ". $field->fid ."_fid = %d", $file->fid);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_file_references().
+ */
+function term_fields_file_references($file) {
+  $count = 0;
+  
+  if ($storage = term_fields_get_storage()) {
+    foreach (term_fields_get_fields('fields') as $field => $info) {
+      if ($field->type === 'file' && isset($storage[$field->fid][$field->fid .'_fid'])) {
+        $count += db_result(db_query("SELECT COUNT(*) FROM {term_fields_term} WHERE ". $field->fid ."_fid' = %d", $file->fid));
+      }
+    }
+  }
+  
+  return $count ? array('term_fields' => $count) : NULL;
+}
+
+/**
+ * @} End of "defgroup Filefield hooks".
+ * 
+ * @defgroup Term Fields hooks
+ * @{
+ */
+
+/**
+ * Implements hook_term_fields_info().
+ * 
+ * Declares field types with required information. 'title' and'description'
+ * are mandatory, 'widget' may be omitted (if so, a widget with the same name as field
+ * type is automatically added).
+ * 
+ * All text parts should not be translated, because they need to be store untranslated
+ * in the {cache} table.
+ */
+function term_fields_term_fields_info() {
+  $info = array(
+    'text' => array(
+      'title' => 'Text',
+      'description' => 'Text fields may be a simple text entry or a text area with optionally text processing options.',
+      'widgets' => array(
+        'textfield' => array('title' => 'Simple text field'),
+        'textarea' => array('title' => 'Text area'),
+      ),
+    ),
+    'list' => array(
+      'title' => 'List',
+      'description' => 'A list allows to choose a value from the defined ones.',
+      'widgets' => array(
+        'radio' => array('title' => 'Radio buttons'),
+        'select' => array('title' => 'Select list'),
+      ),
+    ),
+    'choice' => array(
+      'title' => 'Single choice',
+      'description' => 'This field type exposes widgets for single choices, like active/inactive, 0/1 or yes/no questions.',
+      'widgets' => array(
+        'radio' => array('title' => 'Radio buttons'),
+        'checkbox' => array('title' => 'Checkbox'),
+      ),
+    ),
+    'numeric' => array(
+      'title' => 'Numeric',
+      'description' => 'Numeric fields store numbers and offers validation filters.',
+      'widgets' => array(
+        'textfield' => array(
+          'title' => 'Text field',
+          'description' => 'This widget accepts various numeric formats.',
+        ),
+        'select' => array(
+          'title' => 'Select list',
+          'description' => 'This widget handles only integers.',
+        ),
+      ),
+    ),
+    'file' => array(
+      'title' => 'File',
+      'description' => 'Upload files to the server.',
+      'widgets' => array(
+        'file' => array(
+          'title' => 'Generic',
+          'description' => 'This widget handles all kind of files and exposes some simple options.',
+        ),
+        'image' => array(
+          'title' => 'Image',
+          'description' => 'This widget handles images, with advanced options.',
+        ),
+      ),
+    ),
+  );
+  
+  if (module_exists('date_api')) {
+    $info['date'] = array(
+     'title' => 'Date',
+      'description' => 'Handles date fields with configurable granularity and format.',
+      'widgets' => array(
+        DATE_ISO => array(
+          'title' => 'ISO date',
+          'description' => 'Store a date in the database as an ISO date, recommended for historical or partial dates.',
+        ), 
+        DATE_DATETIME => array(
+          'title' => 'Datetime',
+          'description' => 'Store a date in the database as a datetime field, recommended for complete dates and times that may need timezone conversion.',
+        ),
+      ),
+    );
+    
+    if (module_exists('date_popup')) {
+      $info['date']['widgets']['date_popup'] = array(
+        'title' => 'Date popup',
+        'description' => 'Use a date popup widget to select the date. Maximum granularity is year/month/day.',
+      );
+    }
+  }
+  
+  return $info;
+}
+
+/**
+ * Implements hook_term_fields_api().
+ * 
+ * @param $op
+ *   The operation to perform. It may be:
+ *   - 'storage': The column names and definition for field storage (see hook_schema).
+ *     The main column (the one that stores the value) should be returned with first
+ *     index, for Feeds compatibility (needs some work there).
+ *   - 'views': The Views data.
+ *   - 'field save': The field to save, when a term is being saved.
+ *   - 'field display': Render HTML. The term object is present in the $values array,
+ *     as '#term' key.
+ * @param $field
+ *   The field definition.
+ * @param $values
+ *   All fields or form values if applicable. For the 'field save' operation, a special
+ *   key '#term' is added to the $value array, containing the term object.
+ */
+function term_fields_term_fields_api($op, $field, $values = array()) {
+  // This allows us to call the same function either for term_fields_term_fields_api()
+  // and term_fields_term_fields_forms_api() hooks. For contributed modules such thing is
+  // totally unecessary, particularly if it implements only a few number of field types.
+  $dummy_reference = NULL;
+  
+  switch ($op) {
+  
+    case 'storage':
+      return term_fields_invoke_field_api($op, $field, $values, $dummy_reference, $dummy_reference);
+    
+    case 'views data':
+      return term_fields_invoke_field_api('views_data', $field, $values, $dummy_reference, $dummy_reference);
+    
+    case 'field save':
+      return term_fields_invoke_field_api('field_save', $field, $values, $dummy_reference, $dummy_reference);
+    
+    case 'field display':
+      return term_fields_invoke_field_api('field_display', $field, $values, $dummy_reference, $dummy_reference);
+    
+    case 'delete field':
+      return term_fields_invoke_field_api('field_delete', $field, $values, $dummy_reference, $dummy_reference);
+  }
+}
+
+/**
+ * Implements hook_term_fields_forms_api().
+ * 
+ * @param $op
+ *   The operation to perform:
+ *   - 'settings form': The settings form for configuring the field.
+ *   - 'settings validate': Settings form validation. Note that $values variable is not set
+ *     because all data already are in the $field object.
+ *   - 'settings save': Allows to modify the form_state object before database storage. The
+ *     $field object is built from the $form_state['values'] content, so it could be the  place
+ *     where handle some cleaning, especially in the 'options' array, to reduce storage space.
+ *   - 'field form': The field form that is displayed on the term edit page.
+ *   - 'field validate': Term field values validation.
+ * @param &$form
+ *   This parameter is passed by reference to allow changes (enctype attribute, validation
+ *   function...). It may represent:
+ *   - 'settings': The global form.
+ *   - 'form': The main term edit form.
+ *   For other operations, it is not currently used.
+ * @param &$form_state
+ *    Same idea than &$form variable, see above.
+ * @param $field
+ *   The field object.
+ * @param $values
+ *   This is different for each operation:
+ *   - 'settings form': Not applicable.
+ *   - 'settings validate': The $form_state['values']['options'] data, with an additional
+ *     key '#parents' for setting error on form elements.
+ *   - 'settings save': The $form_state['values']['options'] data.
+ *   - 'field form': All term fields values for a given term.
+ *   - 'field validate': Posted values specific to the considered field. A key ['#parents']
+ *     is added, in order to easily locate the field element in the form, for example to 
+ *     permit to find the error element for targeting errors.  
+ */
+function term_fields_term_fields_forms_api($op, &$form, &$form_state, $field, $values = array()) {
+  switch ($op) {
+  
+    case 'settings form':
+      return term_fields_invoke_field_api('settings_form', $field, $values, $form, $form_state);
+      break;
+    
+    case 'settings validate':
+      term_fields_invoke_field_api('settings_form_validate', $field, $values, $form, $form_state);
+      break;
+    
+    case 'settings save':
+      term_fields_invoke_field_api('settings_form_submit', $field, $values, $form, $form_state);
+      break;
+      
+    case 'field form':
+      return term_fields_invoke_field_api('field_form', $field, $values, $form, $form_state);
+    
+    case 'field validate':
+      term_fields_invoke_field_api('field_form_validate', $field, $values, $form, $form_state);
+      break;
+  }
+}
+
+/**
+ * Implements hook_term_fields_suffixes().
+ * 
+ * @return
+ *   An array containing the suffixes that may be used in the {term_fields_term} column
+ *   names for all of the fields defined by this module. This avoids collision with user
+ *   defined field IDs.
+ */
+function term_fields_term_fields_suffixes() {
+  return array('_value', '_format', '_fid', '_alt');
+}
+
+/**
+ * @} End of "defgroup Term Fields hooks".
+ *
+ * @defgroup I18N hooks
+ * @{
+ */
+
+/**
+* Implements hook_locale().
+*/
+function term_fields_locale($op = 'groups', $group = NULL) {
+  switch ($op) {
+    case 'groups':
+      return array('term_fields' => t('Term fields'));
+  }
+}
+
+/**
+ * @} End of "defgroup I18N hooks".
+ *
+ * @defgroup Views hooks
+ * @{
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function term_fields_views_api() {
+  return array(
+    'api' => 2,
+    'path' => drupal_get_path('module', 'term_fields') . '/views',
+  );
+}
+
+/**
+ * @} End of "defgroup Views hooks".
+ *
+ * @defgroup Token hooks
+ * @{
+ */
+
+/**
+ * Implements hook_token_values().
  */
 function term_fields_token_values($type, $object = NULL, $options = array()) {
   $tokens = $terms = array();
@@ -648,13 +620,12 @@ function term_fields_token_values($type, $object = NULL, $options = array()) {
   // already benn loaded (nodeapi operations: 'view', 'presave', 'print').
   // If not (operation 'presave'), we have to buils the fields array for
   // each field.
-  if ($type == 'node' && ! (empty($object->taxonomy))) {
+  if ($type === 'node' && ! (empty($object->taxonomy))) {
     $check = reset($object->taxonomy);
 
     // Fields have been loaded.
     if (is_object($check)) {
-      $function = create_function('$term', 'return isset($term->fields) ? $term->fields : array();');
-      $terms = array_map($function, $object->taxonomy);
+      $terms = array_map(create_function('$term', 'return isset($term->fields) ? $term->fields : array();'), $object->taxonomy);
     }
     // Nodeapi presave operation. This case is important, especially if the
     // Pathauto module is used.
@@ -673,11 +644,13 @@ function term_fields_token_values($type, $object = NULL, $options = array()) {
             foreach (taxonomy_get_term_by_name($name) as $term) {
               if ($term->vid == $vid) {
                 $tid = $term->tid;
+                break;
               }
             }
 
-            if (! isset($terms[$term->tid])) {
-              $terms[$term->tid] = term_fields_get_fields($term);
+            if ($tid && ! isset($terms[$tid])) {
+              $terms[$tid] = term_fields_render_fields($term);
+              
             }
           }
         }
@@ -689,42 +662,39 @@ function term_fields_token_values($type, $object = NULL, $options = array()) {
           foreach ($term as $tid) {
             if ($tid && ! isset($terms[$tid])) {
               $dummy_term = (object) array('tid' => $tid, 'vid' => $vid);
-              $terms[$tid] = term_fields_get_fields($dummy_term);
+              $terms[$tid] = term_fields_render_fields($dummy_term);
             }
           }
         }
         elseif (is_object($term)) {
           if (! isset($terms[$term->tid])) {
-            $terms[$term->tid] = term_fields_get_fields($term);
+            $terms[$term->tid] = term_fields_render_fields($term);
           }
         }
         elseif ($term) {
           $dummy_term = (object) array('tid' => $term, 'vid' => $vid);
-          $terms[$term] = term_fields_get_fields($dummy_term);
+          $terms[$term] = term_fields_render_fields($dummy_term);
         }
       }
     }
   }
   // Taxonomy
-  elseif ($type == 'taxonomy') {
-    $terms[$object->tid] = term_fields_get_fields($object);
+  elseif ($type === 'taxonomy') {
+    $terms[$object->tid] = term_fields_render_fields($object);
   }
+  
+  if (in_array($type, array('taxonomy', 'node'), TRUE)) {
+    foreach (term_fields_get_fields('fields') as $fid => $field) {
+      $value = '';
 
-  if (in_array($type, array('taxonomy', 'node'))) {
-    foreach (term_fields_get_rows() as $fid => $field) {
-      if ($field->type != 'textarea' && $field->type != 'date') {
-        $value = '';
-
-        if ($terms) {
-          $function = create_function('$term', 'return isset($term["'. $field->fid .'"]) ? $term["'. $field->fid .'"] : NULL;');
-          if ($values = array_filter(array_map($function, $terms))) {
-            $value = implode(',', $values);
-          }
+      if ($terms) {
+        $function = create_function('$term', 'return isset($term["'. $fid .'"]) ? $term["'. $fid .'"] : NULL;');
+        if ($values = array_filter(array_map($function, $terms))) {
+          $value = implode(',', $values);
         }
-
-        $tokens['field-' . $fid] = check_plain($value);
-        $tokens['field-' . $fid . '-raw'] = $value;
       }
+      
+      $tokens["field-$fid"] = $value;
     }
   }
 
@@ -732,78 +702,26 @@ function term_fields_token_values($type, $object = NULL, $options = array()) {
 }
 
 /**
- * Implementation of hook_token_list().
+ * Implements hook_token_list().
  */
 function term_fields_token_list($type = 'all') {
   if ($type == 'taxonomy' || $type == 'node' || $type == 'all') {
     $tokens = array();
-    $fields = term_fields_get_rows();
-    foreach ($fields as $fid => $field) {
-      if ($field->type != 'textarea' && $field->type != 'date') {
-        $tokens['term_fields']['field-' . $fid] = t('@description', array('@description' => $field->description));
-        $tokens['term_fields']['field-' . $fid . '-raw'] = t('@description - *RAW*', array('@description' => $field->description));
-      }
+    
+    foreach (term_fields_get_fields('fields') as $fid => $field) {
+      $tokens['term_fields']["field-$fid"] = t('@title', array('@title' => $field->title));
     }
+    
     return $tokens;
   }
 }
 
 /**
- * Function returns db field configuratin
+ * @} End of "defgroup Token hooks".
  *
- * @param string $type type of term field
- * @return array
- *
- */
-function term_fields_get_db_conf($type) {
-   $result = array();
-  // Determine which data type to use for the new column.
-  switch ($type) {
-    case 'checkbox':
-      $result = array('type' => 'int', 'size' => 'tiny', 'default' => 0);
-      break;
-    case 'textfield':
-    case 'textarea':
-    case 'select':
-      $result = array('type' => 'text', 'size' => 'big');
-      break;
-
-    case 'numeric':
-    case 'file':
-      $result = array('type' => 'int');
-      break;
-
-    case 'date':
-      $result = array('type' => 'datetime');
-      break;
-  }
-  return $result;
-}
-
-function term_fields_get_children($tid, $vid = 0, $key = 'tid') {
-  $children = taxonomy_get_children($tid, $vid, $key);
-  $result = array();
-  foreach ($children as $child) {
-    $result[] = term_fields_get_term($child->$key);
-  }
-  return $result;
-}
-
-/**
- * Implementation hook_schema_alter()
- */
-function term_fields_schema_alter(&$schema) {
-  $fields = term_fields_get_rows();
-  foreach ($fields as $field) {
-    $schema['term_fields_term']['fields'][$field->fid] = term_fields_get_db_conf($field->type);
-  }
-}
-
-/**
- * @defgroup Hook functions for Feeds.
+ * @defgroup cTools hooks
  * @{
  */
-
 
 /**
  * Implementation hook_ctools_plugin_api()
@@ -818,6 +736,13 @@ function term_fields_ctools_plugin_api($owner, $api) {
 }
 
 /**
+ * @} End of "defgroup cTools hooks".
+ *
+ * @defgroup Feeds hooks
+ * @{
+ */
+
+/**
  * A hook_feeds_plugins() declares available Fetcher, Parser or Processor
  * plugins to Feeds. For an example look at feeds_feeds_plugin(). For exposing
  * this hook hook_ctools_plugin_api() MUST be implemented, too.
@@ -825,7 +750,6 @@ function term_fields_ctools_plugin_api($owner, $api) {
  * @see feeds_feeds_plugin()
  */
 function term_fields_feeds_plugins() {
-  $path = drupal_get_path('module', 'term_fields') . '/feeds';
   $info = array();
   
   $info['TermFieldsTermProcessor'] = array(
@@ -836,7 +760,7 @@ function term_fields_feeds_plugins() {
       'parent' => 'FeedsTermProcessor',
       'class' => 'TermFieldsTermProcessor',
       'file' => 'TermFieldsTermProcessor.inc',
-      'path' => $path,
+      'path' => drupal_get_path('module', 'term_fields') . '/feeds',
     ),
   );
   
@@ -847,7 +771,7 @@ function term_fields_feeds_plugins() {
  * Alter mapping targets for taxonomy terms. Use this hook to add additional
  * target options to the mapping form of Taxonomy term processor.
  *
- * For an example implementation, look at geotaxnomy module.
+ * For an example implementation, look at geotaxonomy module.
  * http://drupal.org/project/geotaxonomy
  *
  * @param &$targets
@@ -858,8 +782,12 @@ function term_fields_feeds_plugins() {
  *   The vocabulary id
  */
 function term_fields_feeds_term_processor_targets_alter(&$targets, $vid) {
-  $fields = term_fields_get_rows($vid);
-  foreach($fields as $field) {
+  // @todo actually I think that we should map each table column and
+  // provide more options. If anyone still need Feeds integration, please
+  // create a new issue for advanced Feeds support. Help for testing is
+  // very welcome!
+  
+  foreach(term_fields_get_fields('fields') as $field) {
     $targets[$field->fid] = array(
       'name' => 'Term field: ' . $field->title,
       'description' => $field->description,
@@ -885,10 +813,394 @@ function term_fields_feeds_term_set_target(&$term, $target, $value) {
  */
 function term_fields_feeds_taxonomy_load($term) {
   $term_object = (object) $term;
-  $fields = term_fields_get_fields($term_object);
+  $fields = term_fields_render_fields($term_object);
   return array_merge($term, $fields);
 }
 
 /**
- * @}
+ * @} End of "defgroup Feeds hooks".
  */
+
+/**
+ * Wrapper for translation through I18N strings.
+ * 
+ * @see i18nstrings()
+ */
+function term_fields_translate($name, $string, $field = NULL, $langcode = NULL, $textgroup = 'term_fields') {
+  $key = array($textgroup);
+  
+  if (! empty($field->fid)) {
+    $key[] = $field->fid;
+  }
+  
+  $key[] = $name;
+  return function_exists('i18nstrings') ? i18nstrings(implode(':', $key), $string, $langcode) : $string; 
+}
+
+/**
+ * Gets a standard formatted title for a Views table.
+ */
+function term_fields_views_format_title($field) {
+  return t('@title (@fid)', array('@title' => $field->title, '@fid' => $field->fid));
+}
+
+/**
+ * Gets a standard formatted help for a Views table.
+ */
+function term_fields_views_format_help($field) {
+  $help = t($field->type) .'/'. t($field->widget) .' - ';
+  
+  if (! empty($field->vids)) {
+    $vocs = array();
+    
+    foreach ($field->vids as $voc) {
+      $vocabulary = taxonomy_vocabulary_load($voc['vid']);
+      $vocs[] = check_plain($vocabulary->name);
+    }
+    
+    $help .= t('Appears in: @vocabularies.', array('@vocabularies' => implode(', ', $vocs)));
+  }
+  else {
+    $help .= t('Not used in any vocabulary yet.');
+  }
+  
+  return $help;
+}
+ 
+/**
+ * Gets a list of field instances for a given vocabulary.
+ * 
+ * @param $vid
+ *   The vocabulary ID.
+ * @return
+ *   An array of field definitions.
+ */
+function term_fields_vocabulary_fields($vid = NULL) {
+  static $vids = array();
+  
+  if( ! isset($vids[$vid])) {
+    $fields = term_fields_get_fields();
+    $vids[$vid] = array();
+    
+    if (array_key_exists($vid, $fields)) {
+      array_walk($fields[$vid], 'term_fields_walk_vocabulary_fields', $vid);
+      $vids[$vid] = $fields[$vid];
+    }
+  }
+  
+  return $vids[$vid];
+}
+
+/**
+ * Callback function for array_walk().
+ * 
+ * @see term_fields_vocabulary_fields().
+ */
+function term_fields_walk_vocabulary_fields(&$field, $key, $vid) {
+  // Not really necessay, just paranoïd...
+  $field->vids[$vid] += array('vid' => $vid, 'required' => FALSE, 'weight' => 0);
+  
+  foreach ($field->vids[$vid] as $name => $value) {
+    $field->{$name} = $value;
+  }
+}
+
+/**
+ * Gets a list of field instances.
+ * 
+ * @param $key
+ *   The type of . Key may be:
+ *   - 'fields': The list of all fields, indexed by field ID.
+ *   - 'voc': The list of all fields aatached to at least one vocabulary,
+ *     indexed by vocabulary ID (vid).
+ *   With any other value, the full $fields variables is returned.
+ * @param $reset
+ *   TRUE means clearing the fields information stored in database cache.
+ * @return
+ *   An array of field definitions.
+ */
+function term_fields_get_fields($key = 'voc', $reset = FALSE) {
+  static $fields;
+  
+  if ($reset) {
+    $fields = NULL;
+    cache_clear_all('term_fields_fields', 'cache');
+  }
+  
+  if (! isset($fields)) {
+    if ($cache = cache_get('term_fields_fields', 'cache')) {
+      $fields = $cache->data;
+    }
+    else {
+      $fields = array('fields' => array(), 'voc' => array());
+      $result = db_query("SELECT tf.fid, tf.module, tf.title, tf.description, tf.type, tf.widget, tf.options, tf.instantiated, tfi.vid, tfi.required, tfi.weight
+        FROM {term_fields} tf LEFT JOIN {term_fields_instance} tfi ON tf.fid = tfi.fid ORDER BY tfi.vid, tfi.weight, tf.title");
+      
+      while ($field = db_fetch_object($result)) {
+        foreach (array('vid', 'required', 'weight') as $name) {
+          ${$name} = $field->{$name};
+          unset($field->{$name});
+        }
+        
+        if (! isset($fields['fields'][$field->fid])) {
+          $field->vids = array();
+          $field->options = ! empty($field->options) ? unserialize($field->options) : array();
+          $fields['fields'][$field->fid] = drupal_clone($field);
+        }
+        
+        if (isset($vid) && is_numeric($vid)) {
+          // Use reference instead of copying object, to reduce memory usage.
+          // @todo compare memory gain vs process cost, because this forces extra
+          // process in term_fields_vocabulary_fields() function...
+          $fields['voc'][$vid][$field->fid] = & $fields['fields'][$field->fid];
+          $fields['fields'][$field->fid]->vids[$vid] = array('vid' => $vid, 'required' => (bool) $required, 'weight' => $weight);
+        }
+      }
+      
+      cache_set('term_fields_fields', $fields, 'cache');
+    }
+  }
+  
+  return array_key_exists($key, $fields) ? $fields[$key] : $fields;
+}
+
+/**
+ * Invokes the specified Term Fields plugin.
+ */
+function term_fields_invoke_field_api($callback, $field, $values, &$form, &$form_state) {
+  module_load_include('inc', 'term_fields', "plugins/$field->type");
+  $function = 'term_fields_'. $field->type .'_'. $callback;
+  return function_exists($function) ? $function($field, $values, $form, $form_state) : array();
+}
+
+/**
+ * Retrieves information about supported fields.
+ */
+function term_fields_get_fields_info($type = NULL, $reset = FALSE) {
+  static $info;
+  
+  if ($reset) {
+    $info = NULL;
+    cache_clear_all('term_fields_info', 'cache');
+  }
+  
+  if (! isset($info)) {
+    if ($cache = cache_get('term_fields_info', 'cache')) {
+      $info = $cache->data;
+    }
+    else {
+      $info = array();
+    
+      foreach (module_implements('term_fields_info') as $module) {
+        $function = $module .'_term_fields_info';
+        
+        if ($types = $function()) {
+          // Ensures defined types are valid.
+          foreach ($types as $key => $type_info) {
+            if (! strlen($key) || is_numeric($key) || ! isset($type_info['title']) || ! isset($type_info['description'])) {
+              unset($types[$key]);
+              continue;
+            }
+            
+            if (empty($type_info['widgets'])) {
+              $types[$key]['widgets'] = array($key => array('title' => $type_info['title']));
+            }
+            
+            foreach ($types[$key]['widgets'] as $w_key => $widget) {
+              if (! array_key_exists('title', $widget)) {
+                unset($types[$key]['widgets'][$w_key]);
+              }
+            }
+                        
+            $types[$key]['module'] = $module;
+          }
+          
+          // Do not override existing types with array_merge().
+          $info += $types;
+        }
+      }
+      
+      drupal_alter('term_fields_info', $info);
+      cache_set('term_fields_info', $info, 'cache');
+    }
+  }
+  
+  if ($type) {
+    return array_key_exists($type, $info) ? $info[$type] : array();
+  }
+  
+  return $info;
+}
+
+/**
+ * Form validation handler for the taxonomy_form_term() form.
+ *
+ * @see taxonomy_form_term()
+ * @see term_fields_form_taxonomy_form_term_alter()
+ * @see term_fields_taxonomy_form_term_submit()
+ */
+function term_fields_taxonomy_form_term_validate(&$form, &$form_state) {
+  if ($fields = term_fields_vocabulary_fields($form_state['values']['vid'])) {
+    foreach ($fields as $field) {
+      if (module_hook($field->module, 'term_fields_forms_api')) {
+        $values = $form_state['values']['fields'][$field->fid];
+        $values['#parents'] = array('fields', $field->fid);
+        call_user_func_array($field->module .'_term_fields_forms_api', array('field validate', &$form, &$form_state, $field, $values));
+      }
+    }
+  }
+}
+
+/**
+ * Form submission handler; txonomy term form.
+ *
+ * @see taxonomy_form_term()
+ * @see term_fields_form_taxonomy_form_term_alter()
+ * @see term_fields_taxonomy_form_term_validate()
+ */
+function term_fields_taxonomy_form_term_submit($form, &$form_state) {
+  // Clear the $form_state['storage']['fields'] is not empty. It is used by the
+  // file field AHAH.
+  if (isset($form_state['storage']['fields'])) {
+    unset($form_state['storage']['fields']);
+  }
+}
+
+/**
+ * Gets the columns definition for the table {term_fields_term}.
+ */
+function term_fields_get_storage($vid = NULL, $reset = FALSE) {
+  static $storage = array();
+  
+  if ($reset) {
+    $storage = NULL;
+    cache_clear_all('term_fields_storage', 'cache');
+  }
+  
+  if (! isset($info)) {
+    if ($cache = cache_get('term_fields_storage', 'cache')) {
+      $storage = $cache->data;
+    }
+    else {
+      $storage = array();
+    
+      foreach (term_fields_get_fields('fields') as $field) {
+        if ($columns = module_invoke($field->module, 'term_fields_api', 'storage', $field)) {
+          $storage[$field->fid] = $columns;
+        }
+      }
+      
+      cache_set('term_fields_storage', $storage, 'cache');
+    }
+  }
+  
+  $fields = $vid ? array_intersect_key($storage, term_fields_vocabulary_fields($vid)) : $storage;
+  $columns = array();
+  
+  foreach ($fields as $cols) {
+    $columns += $cols;
+  }
+  
+  return $columns;
+}
+
+/**
+ * Gets rendered fields for a term.
+ */
+function term_fields_render_fields($term) {
+  $fields = array();
+  $values = term_fields_get_fields_values($term);
+  $values['#term'] = $term;
+  
+  foreach (term_fields_vocabulary_fields($term->vid) as $fid => $field) {
+    $fields[$fid] = module_invoke($field->module, 'term_fields_api', 'field display', $field, $values);
+  }
+  
+  return $fields;
+}
+
+/**
+ * Gets term fields values.
+ * 
+ * @param $term
+ *   The term object.
+ * @return
+ *   An array of fields values from a given term, keyed by field ID.
+ */
+function term_fields_get_fields_values($term) {
+  if ($storage = term_fields_get_storage($term->vid)) {
+    $columns = '`'. implode('`, `', array_keys($storage)) .'`';
+    
+    // Rewriting query may allow other modules to retrieve some data in
+    // joined tables. Do not join with any table which could return more
+    // than one row: multiple values are handled below.
+    $sql = db_rewrite_sql("SELECT $columns FROM {term_fields_term} WHERE tid = %d", 'term_fields_term', 'tid', array($term->tid));
+    
+    if ($values = db_fetch_array(db_query($sql, $term->tid))) {
+      // Here it is possible to play with multiple values, using own query(ies).
+      drupal_alter('term_fields_field_values', $values, $term, term_fields_vocabulary_fields($term->vid));
+      return $values;
+    }
+  }
+
+  return array();
+}
+
+/**
+ * Loads a fields from its ID.
+ */
+function term_fields_field_load($fid) {
+  if ($fid) {
+    $fields = term_fields_get_fields('fields');
+    
+    if (array_key_exists($fid, $fields) && is_object($fields[$fid])) {
+      
+      // Ensures that the module that handles this type of field is
+      // still enabled and supports the specified type and widget.
+      if (module_exists($fields[$fid]->module)) {
+        $field_info = term_fields_get_fields_info($fields[$fid]->type);
+        
+        if (array_key_exists($fields[$fid]->widget, $field_info['widgets'])) {
+          return $fields[$fid];
+        }
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Title callback.
+ */
+function term_fields_admin_type_title($field, $vocabulary) {
+  // No need for isset() there, all checks have been performed by
+  // the term_fields_field_load() function.
+  $field_info = term_fields_get_fields_info($field->type);
+  
+  return t('Configure the field @field of type @type attached to the vocabulary @vocabulary', array('@field' => $field->title, '@type' => t($field_info['title']), '@widget' => t($field_info['widgets'][$field->widget]['title']), '@vocabulary' => $vocabulary->name));
+}
+
+/**
+ * Title callback.
+ */
+function term_fields_vocabulary_title($vid) {
+  if ($vocabulary = taxonomy_vocabulary_load($vid)) {
+    return check_plain($vocabulary->name);
+  }
+  
+  return t('Undefined');
+}
+
+if (! module_exists('content')) {
+  /**
+   * Helper form element validator : integer > 0.
+   */
+  function _element_validate_integer_positive($element, &$form_state) {
+    $value = $element['#value'];
+    if ($value !== '' && (!is_numeric($value) || intval($value) != $value || $value <= 0)) {
+      form_error($element, t('%name must be a positive integer.', array('%name' => $element['#title'])));
+    }
+  }
+}
+

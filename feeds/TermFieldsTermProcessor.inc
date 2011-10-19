@@ -17,10 +17,16 @@ class TermFieldsTermProcessor extends FeedsTermProcessor {
     $tid = parent::existingItemId($batch, $source);
     
     if ($tid == 0) {
+      $storage = term_fields_get_storage();
+      
       foreach ($this->uniqueTargets($batch) as $target => $value) {
-        $query = "SELECT tid FROM {term_fields_term} AS tft, term_fields AS tf WHERE tf.fid = '%s' AND tf.vid = %d and tft.%s = '%s'";
-        if ($tid = db_result(db_query($query, $target, $this->vocabulary()->vid, $target, $value))) {
-          return $tid;
+        if (! empty($storage[$target])) {
+          list($column, ) = each($storage[$target]);
+          $query = "SELECT tft.tid FROM {term_fields_term} AS tft, {term_fields_instance} AS tfi WHERE tfi.fid = '%s' AND tfi.vid = %d and tft.%s = '%s'";
+        
+          if ($tid = db_result(db_query($query, $target, $this->vocabulary()->vid, $column, $value))) {
+            return $tid;
+          }
         }
       }
     }
