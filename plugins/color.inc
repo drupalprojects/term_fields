@@ -14,21 +14,21 @@
 function term_fields_color_field_form($field, $values, &$main_form, &$form_state) {
   $form = array();
   
-  $default_value = isset($values[$field .'_value']) ?
-    $values[$field .'_value'] :
+  $default_value = isset($values[$field->fid .'_value']) ?
+    $values[$field->fid .'_value'] :
     (isset($field->options['default']['value']) ? $field->options['default']['value'] : '');
   
   switch ($field->widget) {
   
     case 'colorpicker':
-      $form = array(
+      $form['value'] = array(
         '#type' => 'colorpicker_textfield',
         '#default_value' => '#'. $default_value,
       );
       break;
     
-    case 'jquery.colorpicker':
-      $form = array(
+    case 'jquery_colorpicker':
+      $form['value'] = array(
         '#type' => 'colorpicker',
         '#default_value' => $default_value,
       );
