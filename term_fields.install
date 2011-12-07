@@ -196,9 +196,6 @@ function term_fields_update_6101() {
     // Update term_fields tables (columns and/or values).
     term_fields_database_update_6101($ret);
     
-    // Add terms vid to the {term_fields_term} table;
-    
-    
     // Removes deprecated entries in {variables} table.
     db_query("DELETE FROM {variable} WHERE name LIKE 'term_fields_%'");
     
@@ -337,4 +334,23 @@ function term_fields_term_fields_term_update_6101(&$ret, &$field, $default_colum
       db_query("DELETE FROM {term_fields_instance} WHERE fid = '%s'", $field->fid);
     }
   }
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function term_fields_update_6200() {
+  // We now have to set the vid for each row, otherwise they'll be 0
+  // see https://drupal.org/node/1356140
+  $ret = array();
+  $result = db_query("SELECT tf.tid, tf.vid, td.vid AS real_vid FROM {term_fields_term} tf LEFT JOIN {term_data} td ON td.tid = tf.tid");
+  
+  while ($row = db_fetch_object($result)) {
+    // If the vid is 0, it is incorrect and needs to be updated.
+    if (! $row->vid) {
+      $ret[] = update_sql("UPDATE {term_fields_term} SET vid = '". $row->real_vid ."' WHERE tid = '". $row->tid ."'");
+    }
+  }
+  
+  return $ret;
 }
