@@ -357,11 +357,11 @@ function term_fields_file_settings_form_validate($field, $values, &$form, &$form
   $extensions = array_unique(array_filter(array_map('trim', explode(',', $values['allowed_extensions']))));
   form_set_value($form_parent['allowed_extensions'], implode('|', $extensions), $form_state);
   
-  if ($values['max_size'] != '' && (!is_numeric($value['max_size']) || intval($value['max_size']) != $value['max_size'] || $value < 0)) {
-    form_set_error($error_elt .'][max_size', t('%name must be an integer.', array('%name' => $element['#title'])));
+  if ($values['max_size'] != '' && (!is_numeric($values['max_size']) || intval($values['max_size']) != $values['max_size'] || $values['max_size'] < 0)) {
+    form_set_error($error_elt .'][max_size', t('%name must be a positive integer.', array('%name' => $element['#title'])));
   }
   elseif (($values['max_size'] * 1024 * 1024) > term_fields_file_php_max_filesize()) {
-    form_set_error($error_elt .'][max_size', t('Maximum file size exceeds the limit defined by PHP settings.'));
+    form_set_error($error_elt .'][max_size', t('%name exceeds the limit defined by PHP settings.', array('%name' => $element['#title'])));
   }
 }
 
