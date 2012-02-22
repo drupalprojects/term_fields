@@ -19,7 +19,9 @@ class term_fields_handler_field_textarea extends term_fields_handler_field {
 
   function render($values) {
     if (! empty($this->term_fields_field->options['text_processing'])) {
-      $format = ! empty($values->{$this->aliases['format']}) ? $values->{$this->aliases['format']} : FILTER_FORMAT_DEFAULT;
+      $format = ! empty($values->{$this->aliases[$this->additional_fields['format']]}) ?
+        $values->{$this->aliases[$this->additional_fields['format']]} :
+        FILTER_FORMAT_DEFAULT;
       return check_markup($values->{$this->field_alias}, $format, FALSE);
     }
       
