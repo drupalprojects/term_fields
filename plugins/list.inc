@@ -78,7 +78,7 @@ function term_fields_list_views_data($field) {
     'title' => term_fields_views_format_title($field),
     'help' => term_fields_views_format_help($field),
     'field' => array(
-       'handler' => 'term_fields_handler_field',
+       'handler' => 'term_fields_handler_field_list',
        'term_fields_field_name' => $field->fid,
     ),
     'argument' => array(

@@ -235,7 +235,7 @@ function term_fields_taxonomy($op, $type, $array = NULL) {
                 $args = array($save['tid'], $save['vid']);
                 
                 foreach (array_keys($update) as $column) {
-                  $nulls[] = "`$column` = null";
+                  $nulls[] = "$column = null";
                 }
                 
                 db_query("UPDATE {term_fields_term} SET ". implode(', ', $nulls) ." WHERE tid = %d AND vid = %d", $args);
@@ -1161,7 +1161,7 @@ function term_fields_render_fields($term) {
  */
 function term_fields_get_fields_values($term) {
   if ($storage = term_fields_get_storage($term->vid)) {
-    $columns = '`'. implode('`, `', array_keys($storage)) .'`';
+    $columns = implode(', ', array_keys($storage));
     
     // Rewriting query may allow other modules to retrieve some data in
     // joined tables. Do not join with any table which could return more

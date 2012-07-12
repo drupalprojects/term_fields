@@ -74,6 +74,9 @@ function term_fields_views_handlers() {
       'term_fields_handler_field_numeric' => array(
         'parent' => 'views_handler_field_numeric',
       ),
+      'term_fields_handler_field_list' => array(
+        'parent' => 'term_fields_handler_field',
+      ),
       'term_fields_handler_field_date' => array(
         'parent' => 'views_handler_field_date',
       ),
