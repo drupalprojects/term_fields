@@ -820,6 +820,11 @@ function term_fields_feeds_term_processor_targets_alter(&$targets, $vid) {
   // very welcome!
   
   foreach(term_fields_get_fields('fields') as $field) {
+    // Ignore file fields, that need special handling.
+    if ($field->type == 'file') {
+      continue;
+    }
+    
     $targets[$field->fid] = array(
       'name' => 'Term field: ' . $field->title,
       'description' => $field->description,
@@ -837,7 +842,7 @@ function term_fields_feeds_term_processor_targets_alter(&$targets, $vid) {
  * element the user has picked as a source.
  */
 function term_fields_feeds_term_set_target(&$term, $target, $value) {
-  $term[$target] = $value;
+  $term['fields'][$target]['value'] = $value;
 }
 
 /**
