@@ -1171,7 +1171,7 @@ function term_fields_get_fields_values($term) {
     // Rewriting query may allow other modules to retrieve some data in
     // joined tables. Do not join with any table which could return more
     // than one row: multiple values are handled below.
-    $sql = db_rewrite_sql("SELECT $columns FROM {term_fields_term} tf WHERE tf.tid = %d", 'term_fields_term', 'tid', array($term->tid));
+    $sql = db_rewrite_sql("SELECT $columns FROM {term_fields_term} tf WHERE tf.tid = %d", 'tf', 'tid', array($term->tid));
 
     if ($values = db_fetch_array(db_query($sql, $term->tid))) {
       // Here it is possible to play with multiple values, using own query(ies).
